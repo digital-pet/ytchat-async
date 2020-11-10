@@ -90,7 +90,7 @@ def channelid_to_name(channelId, http):
     return data['items'][0]['snippet']['title']
 
 
-class MessageAuthor(object):
+class MessageAuthor:
 
     def __init__(self, json):
         self.is_verified = json['isVerified']
@@ -103,7 +103,7 @@ class MessageAuthor(object):
         self.is_chat_moderator = json['isChatModerator']
 
 
-class LiveChatMessage(object):
+class LiveChatMessage:
 
     def __init__(self, http, json):
         self.http = http
@@ -156,7 +156,7 @@ class LiveChatMessage(object):
             return self.display_message.encode("UTF-8")
 
 
-class LiveChatModerator(object):
+class LiveChatModerator:
 
     def __init__(self, http, json):
         self.http = http
@@ -181,7 +181,7 @@ class LiveChatModerator(object):
             return self.display_name.encode("UTF-8")
 
 
-class YoutubeLiveChat(object):
+class YoutubeLiveChat:
 
     def __init__(self, credential_filename, livechatIds):
         self.logger = logging.getLogger(name="YoutubeLiveChat")
@@ -346,7 +346,7 @@ class YoutubeLiveChat(object):
         self.chat_subscribers.append(callback)
 
 
-class LiveChatApi(object):
+class LiveChatApi:
 
     def __init__(self, http):
         self.http = http
