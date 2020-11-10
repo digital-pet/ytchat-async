@@ -4,189 +4,47 @@
 import cgi
 import logging
 import sys
-import asyncio
-import time
+
 from datetime import datetime, timedelta
 from json import dumps, loads
 from pprint import pformat
 
 import dateutil.parser
-import httplib2
-from oauth2client.file import Storage
+
+#replaces threading, time
+import asyncio
+import async_timeout
+
+#replaces httplib2
+import aiohttp
+
+#replaces oauth2client
+import google_auth
+#maybe not necessary? Will read the code more to determine
+import aiohttp_google_auth_backend
+
+from .utils import *
+from .exceptions import *
+from .types import *
+
+
 from urllib.parse import urlencode
 from queue import Queue
 
+#depreciated and will be replaced
+#from oauth2client.file import Storage
+#import httplib2
 
-
-class YoutubeLiveChatError(Exception):
-
-    def __init__(self, message, code=None, errors=None):
-        Exception.__init__(self, message)
-        self.code = code
-        self.errors = errors
-
-
-def _json_request(http, url, method='GET', headers=None, body=None):
-    resp, content = http.request(url, method, headers=headers, body=body)
-    content_type, content_type_params = cgi.parse_header(resp.get('content-type', 'application/json; charset=UTF-8'))
-    charset = content_type_params.get('charset', 'UTF-8')
-    data = loads(content.decode(charset))
-    if 'error' in data:
-        error = data['error']
-        raise YoutubeLiveChatError(error['message'], error.get('code'), error.get('errors'))
-    return resp, data
-
-
-def get_datetime_from_string(datestr):
-    dt = dateutil.parser.parse(datestr)
-    return dt
-
-def get_top_stream_chat_ids(credential_file):
-    playlist_id = "PLiCvVJzBupKmEehQ3hnNbbfBjLUyvGlqx"
-    storage = Storage(credential_file)
-    credentials = storage.get()
-    http = credentials.authorize(httplib2.Http())
-    url = "https://www.googleapis.com/youtube/v3/playlistItems?"
-    params = {'part': 'contentDetails','playlistId':playlist_id}
-    params = urlencode(params)
-    resp, data = _json_request(http, url + params)
-    chatids = []
-    for item in data['items']:
-        videoid = item['contentDetails']['videoId']
-        url = "https://www.googleapis.com/youtube/v3/videos?"
-        params = {'part': 'liveStreamingDetails','id': videoid}
-        params = urlencode(params)
-        response_obj, video_data = _json_request(http, url + params)
-        chatId = video_data['items'][0]['liveStreamingDetails']['activeLiveChatId']
-        chatids.append(chatId)
-
-    return chatids
-
-def get_live_chat_id_for_stream_now(credential_file):
-    storage = Storage(credential_file)
-    credentials = storage.get()
-    http = credentials.authorize(httplib2.Http())
-    url = "https://www.googleapis.com/youtube/v3/liveBroadcasts?"
-    params = {'part': 'snippet', 'default': 'true'}
-    params = urlencode(params)
-    resp, data = _json_request(http, url + params)
-    return data['items'][0]['snippet']['liveChatId']
-
-
-def get_live_chat_id_for_broadcast_id(broadcastId, credential_file):
-    storage = Storage(credential_file)
-    credentials = storage.get()
-    http = credentials.authorize(httplib2.Http())
-    url = "https://www.googleapis.com/youtube/v3/liveBroadcasts?"
-    params = {'part': 'snippet', 'id': broadcastId}
-    params = urlencode(params)
-    resp, data = _json_request(http, url + params)
-    return data['items'][0]['snippet']['liveChatId']
-
-
-def channelid_to_name(channelId, http):
-    url = "https://www.googleapis.com/youtube/v3/channels?part=snippet&id={0}".format(channelId)
-    response, data = _json_request(http, url)
-    return data['items'][0]['snippet']['title']
-
-
-class MessageAuthor:
-
-    def __init__(self, json):
-        self.is_verified = json['isVerified']
-        self.channel_url = json['channelUrl']
-        self.profile_image_url = json['profileImageUrl']
-        self.channel_id = json['channelId']
-        self.display_name = json['displayName']
-        self.is_chat_owner = json['isChatOwner']
-        self.is_chat_sponsor = json['isChatSponsor']
-        self.is_chat_moderator = json['isChatModerator']
-
-
-class LiveChatMessage:
-
-    def __init__(self, http, json):
-        self.http = http
-        self.json = json
-        self.etag = json['etag']
-        self.id = json['id']
-        snippet = json['snippet']
-        self.type = snippet['type']
-        self.message_text = snippet['textMessageDetails']['messageText']
-        self.display_message = snippet['displayMessage']
-        self.has_display_content = snippet['hasDisplayContent']
-        self.live_chat_id = snippet['liveChatId']
-        self.published_at = get_datetime_from_string(snippet['publishedAt'])
-        self.author = MessageAuthor(json['authorDetails'])
-
-    def delete(self):
-        url = "https://www.googleapis.com/youtube/v3/liveChat/messages"
-        url = url + '?id={0}'.format(self.id)
-        resp, content = self.http.request(url, 'DELETE')
-    def permaban(self):
-        url = "https://www.googleapis.com/youtube/v3/liveChat/bans"
-        message = {u'snippet': {u'liveChatId': self.live_chat_id, u'type': 'permanent', "bannedUserDetails": {"channelId": self.author.channel_id}}}
-        jsondump = dumps(message)
-        url = url + '?part=snippet'
-        resp, data = _json_request(self.http,
-                                   url,
-                                   'POST',
-                                   headers={'Content-Type': 'application/json; charset=UTF-8'},
-                                   body=jsondump)
-        jsonresponse = dumps(data)
-        return data['id']
-    def tempban(self, timee = 300):
-        url = "https://www.googleapis.com/youtube/v3/liveChat/bans"
-        message = {u'snippet': {u'liveChatId': self.live_chat_id, u'type': 'temporary', "banDurationSeconds": timee, "bannedUserDetails": {"channelId": self.author.channel_id}}}
-        jsondump = dumps(message)
-        url = url + '?part=snippet'
-        resp, data = _json_request(self.http,
-                                   url,
-                                   'POST',
-                                   headers={'Content-Type': 'application/json; charset=UTF-8'},
-                                   body=jsondump)
-    def unban(self, id):
-        url = "https://www.googleapis.com/youtube/v3/liveChat/bans"
-        url = url + '?id=' + id
-        content = self.http.request(url, 'DELETE')
-    def __repr__(self):
-        if PY3:
-            return self.display_message
-        else:
-            return self.display_message.encode("UTF-8")
-
-
-class LiveChatModerator:
-
-    def __init__(self, http, json):
-        self.http = http
-        self.json = json
-        self.etag = json['etag']
-        self.id = json['id']
-        snippet = json['snippet']
-        self.channel_id = snippet['moderatorDetails']['channelId']
-        self.channel_url = snippet['moderatorDetails']['channelUrl']
-        self.display_name = snippet['moderatorDetails']['displayName']
-        self.profile_image_url = snippet['moderatorDetails']['profileImageUrl']
-
-    def delete(self):
-        url = "https://www.googleapis.com/youtube/v3/liveChat/moderators"
-        url = url + '?id={0}'.format(self.id)
-        resp, content = self.http.request(url, 'DELETE')
-
-    def __repr__(self):
-        if PY3:
-            return self.display_name
-        else:
-            return self.display_name.encode("UTF-8")
-
+#replaced with asyncio
+#import threading
+#import time
 
 class YoutubeLiveChat:
 
     def __init__(self, credential_filename, livechatIds):
         self.logger = logging.getLogger(name="YoutubeLiveChat")
         self.chat_subscribers = []
-        self.thread = threading.Thread(target=self.run)
+        #self.thread = threading.Thread(target=self.run)
         self.livechatIds = {}
         self.message_queue = Queue()
 
