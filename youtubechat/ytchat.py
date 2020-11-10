@@ -4,7 +4,7 @@
 import cgi
 import logging
 import sys
-import threading
+import asyncio
 import time
 from datetime import datetime, timedelta
 from json import dumps, loads
@@ -13,14 +13,9 @@ from pprint import pformat
 import dateutil.parser
 import httplib2
 from oauth2client.file import Storage
+from urllib.parse import urlencode
+from queue import Queue
 
-PY3 = sys.version_info[0] == 3
-if PY3:
-    from urllib.parse import urlencode
-    from queue import Queue
-else:
-    from Queue import Queue
-    from urllib import urlencode
 
 
 class YoutubeLiveChatError(Exception):
@@ -231,6 +226,25 @@ class YoutubeLiveChat(object):
         if self.thread.is_alive():
             self.thread.join()
 
+    async def _read_loop(self):
+        """
+        
+        """
+        while self.running:
+            pass
+        pass
+        
+    async def _write_loop(self):
+        """
+        
+        """
+        while self.running:
+            to_send = await self.message_queue.get()
+            self._send_message(to_send[0],to_send[1])
+            self.message_queue.task_done()        
+
+        
+        
     def run(self):
         while self.running:
             # send a queued messages
