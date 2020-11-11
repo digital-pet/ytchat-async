@@ -5,8 +5,9 @@
 
 from .utils import *
 from json import dumps
+from types import SimpleNamespace
 
-class MessageAuthor:
+class MessageAuthor(SimpleNamespace):
     def __init__(self, json):
         self.is_verified = json['isVerified']
         self.channel_url = json['channelUrl']

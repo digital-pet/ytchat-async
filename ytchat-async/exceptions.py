@@ -9,3 +9,12 @@ class YoutubeLiveChatError(Exception):
         Exception.__init__(self, message)
         self.code = code
         self.errors = errors
+        
+class DeleteFailedError():
+    pass
+    
+class PermabanFailedError():
+    pass
+    
+class TempbanFailedError():
+    pass

@@ -9,6 +9,11 @@ import cgi
 import aiohttp
 
 def _json_request(http, url, method='GET', headers=None, body=None):
+    
+    #async with aiohttp.ClientSession() as session:
+    #    async with session.post(url, json=json)
+    # argument json is a dict
+    
     resp, content = http.request(url, method, headers=headers, body=body)
     content_type, content_type_params = cgi.parse_header(resp.get('content-type', 'application/json; charset=UTF-8'))
     charset = content_type_params.get('charset', 'UTF-8')

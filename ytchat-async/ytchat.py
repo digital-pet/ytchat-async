@@ -18,11 +18,8 @@ import async_timeout
 
 #replaces httplib2
 import aiohttp
-
 #replaces oauth2client
-import google_auth
-#maybe not necessary? Will read the code more to determine
-import aiohttp_google_auth_backend
+from aioauth_client import GoogleClient
 
 from .utils import *
 from .exceptions import *
@@ -46,19 +43,29 @@ from urllib.parse import urlencode
 
 class YoutubeLiveChat:
 
-    def __init__(self, credential_filename, livechatIds):
+    def __init__(self, cID, cSecret, token_path):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.chat_subscribers = []
         #self.thread = threading.Thread(target=self.run)
         self.livechatIds = {}
         self.message_queue = Queue()
 
-        storage = Storage(credential_filename)
-        credentials = storage.get()
-        self.http = credentials.authorize(httplib2.Http())
+        #storage = Storage(credential_filename)
+        #credentials = storage.get()
+        if not token_path:
+            otoken = do_interactive_auth(cID, cSecret)
+        else:
+            with open(token_path):
+                otoken = file.read()
+        
+
+        self.google = GoogleClient(client_id=client_id, client_secret=client_secret, access_token=otoken)
         self.livechat_api = LiveChatApi(self.http)
 
+
+
         #!!!move this out of init!!!
+        '''
         for chat_id in livechatIds:
             self.livechatIds[chat_id] = {'nextPoll': datetime.now(), 'msg_ids': set(), 'pageToken': None}
             result = self.livechat_api.live_chat_messages_list(chat_id)
@@ -73,6 +80,7 @@ class YoutubeLiveChat:
                                                                        pageToken=self.livechatIds[chat_id]['pageToken'])
                 else:
                     break
+        '''
         #!!!end move this out of init!!!
         
         self.logger.debug("Initalized")
