@@ -1,9 +1,10 @@
-#!/usr/bin/python
-# This Python file uses the following encoding: utf-8
+## ytchat-async/ytchat.py
+#
+#   Contains main YoutubeLiveChat class
+#
 
 import cgi
 import logging
-import sys
 
 from datetime import datetime, timedelta
 from json import dumps, loads
@@ -29,7 +30,7 @@ from .types import *
 
 
 from urllib.parse import urlencode
-from queue import Queue
+
 
 #depreciated and will be replaced
 #from oauth2client.file import Storage
@@ -38,11 +39,15 @@ from queue import Queue
 #replaced with asyncio
 #import threading
 #import time
+#from queue import Queue
+
+#Never used
+#import sys
 
 class YoutubeLiveChat:
 
     def __init__(self, credential_filename, livechatIds):
-        self.logger = logging.getLogger(name="YoutubeLiveChat")
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.chat_subscribers = []
         #self.thread = threading.Thread(target=self.run)
         self.livechatIds = {}
@@ -53,6 +58,7 @@ class YoutubeLiveChat:
         self.http = credentials.authorize(httplib2.Http())
         self.livechat_api = LiveChatApi(self.http)
 
+        #!!!move this out of init!!!
         for chat_id in livechatIds:
             self.livechatIds[chat_id] = {'nextPoll': datetime.now(), 'msg_ids': set(), 'pageToken': None}
             result = self.livechat_api.live_chat_messages_list(chat_id)
@@ -67,22 +73,24 @@ class YoutubeLiveChat:
                                                                        pageToken=self.livechatIds[chat_id]['pageToken'])
                 else:
                     break
-
+        #!!!end move this out of init!!!
+        
         self.logger.debug("Initalized")
 
     def start(self):
-        self.running = True
-        self.thread = threading.Thread(target=self.run)
-        self.thread.daemon = True
-        self.thread.start()
-
-    def join(self):
-        self.thread.join()
-
+        #self.running = True
+        #self.thread = threading.Thread(target=self.run)
+        #self.thread.daemon = True
+        #self.thread.start()
+        
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.run())
+        loop.run_forever()
+    
     def stop(self):
         self.running = False
-        if self.thread.is_alive():
-            self.thread.join()
+        loop = asyncio.get_event_loop()
+        loop.stop()
 
     async def _read_loop(self):
         """
@@ -105,11 +113,14 @@ class YoutubeLiveChat:
         
     def run(self):
         while self.running:
+        
+            #
             # send a queued messages
-            if not self.message_queue.empty():
-                to_send = self.message_queue.get()
-                self._send_message(to_send[0], to_send[1])
+            #if not self.message_queue.empty():
+            #    to_send = self.message_queue.get()
+            #    self._send_message(to_send[0], to_send[1])
             # check for messages
+            
             for chat_id in self.livechatIds:
                 if self.livechatIds[chat_id]['nextPoll'] < datetime.now():
                     msgcache = self.livechatIds[chat_id]['msg_ids']
